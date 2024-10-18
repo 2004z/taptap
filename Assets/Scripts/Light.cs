@@ -88,15 +88,15 @@ public class Light : MonoBehaviour, IRay
         {
             hit = Physics2D.Raycast(startPoint, currentDirection, remainingLength, collisionLayer);
             if (hit.collider != null && hit.collider.tag == "Reflection")
-            {
-                Vector2 hitPoint = hit.point;
-                Vector2 normal = hit.normal;
-                Vector2 reflection = Vector2.Reflect(currentDirection, normal);
-                startPoint = hitPoint;
-                currentDirection = reflection;
-                rayPoints.Add(hitPoint);
-                remainingLength -= hit.distance;
-                reflections++;
+            {                
+                    Vector2 hitPoint = hit.point;
+                    Vector2 normal = hit.normal;
+                    Vector2 reflection = Vector2.Reflect(currentDirection, normal);
+                    startPoint = hitPoint;
+                    currentDirection = reflection;
+                    rayPoints.Add(hitPoint);
+                    remainingLength -= hit.distance;
+                    reflections++;                               
             }
             else
             {
@@ -105,8 +105,6 @@ public class Light : MonoBehaviour, IRay
                 remainingLength = 0;
             }
         }
-
-        // Ensure the length is set properly
         if (remainingLength <= 0)
         {
             rayPoints.Add(startPoint + currentDirection * rayLength);
