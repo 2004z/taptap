@@ -5,7 +5,8 @@ TagManager:
   serializedVersion: 2
   tags:
   - Reflection
-  - Refraction
+  - Refraction1
+  - Refraction2
   layers:
   - Default
   - TransparentFX

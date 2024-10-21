@@ -1,20 +1,14 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using RayInterface;
 
-public class ReflectionMode : MonoBehaviour,IRay
+public class Filter : MonoBehaviour
 {
-    private Rigidbody2D rb;
-    public void Ray()
-    {
-        
-    }
-
+    public E_color color = E_color.Cyan;
     // Start is called before the first frame update
     void Start()
     {
-        rb = GetComponent<Rigidbody2D>();
+        
     }
 
     // Update is called once per frame
