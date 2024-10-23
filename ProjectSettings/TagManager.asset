@@ -7,6 +7,7 @@ TagManager:
   - Reflection
   - Refraction1
   - Refraction2
+  - Filter
   layers:
   - Default
   - TransparentFX
