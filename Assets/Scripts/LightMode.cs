@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using RayInterface;
 using System;
+using System.Runtime.InteropServices.WindowsRuntime;
 public  enum E_color
 {
     White,
@@ -14,8 +15,8 @@ public  enum E_color
 }
 public class Light : MonoBehaviour, IRay
 {
-    public static int LightIntense =10;
-    
+    public static int LightIntense =10;//光强
+    int ChangeColor = 0;//是否变色
     public float MoveSpeed = 5f;//移动速度
     private Rigidbody2D rb;//刚体
     public LayerMask collisionLayer;//碰撞层
@@ -30,11 +31,13 @@ public class Light : MonoBehaviour, IRay
 
 
     private Vector2 startPoint;//射线起始点
-    private Vector2 direction = Vector2.right;//射线初始方向
+    private Vector2 direction ;//射线初始方向
     private Vector2 lastInputDirection;//最后按下的方向
     private LineRenderer lineRenderer;//线条
 
     private bool isShooting = false;//是否正在射线
+
+    public float offset =0.01f;//偏移量
     public static Light Instance { get; private set; }
 
     void Awake()
@@ -62,42 +65,48 @@ public class Light : MonoBehaviour, IRay
     void Update()
     {
         rayLength = LightIntense * 5 -decay*decay;
-        if (!isShooting )
+        if (!isShooting)
         {
             Move();
         }
         
         if (Input.GetKeyDown(KeyCode.J)&&LightIntense>0)
-        {
+        {                        
             DecidedDecay();
             isShooting = true;
-            direction = lastInputDirection;
+            rb.velocity = Vector2.zero;            
             ((IRay)this).Ray();
             LightIntense -= 1;
         }
 
     }
     #region 移动相关以及获取初始射线方向
+    
     void Move()
     {
         float horizontalInput = Input.GetAxisRaw("Horizontal");
         float verticalInput = Input.GetAxisRaw("Vertical");
 
-        if (horizontalInput > 0)
+        // 判断方向，优先级为上下>左右
+        if (horizontalInput>0&&verticalInput==0|| horizontalInput > 0&& verticalInput > 0||horizontalInput>0&&verticalInput<0)
         {
-            lastInputDirection = Vector2.right;
+            direction = Vector2.right;
         }
-        else if (horizontalInput < 0)
+        else if (horizontalInput < 0&& verticalInput == 0||horizontalInput<0&&verticalInput>0|| horizontalInput < 0 && verticalInput < 0)
         {
-            lastInputDirection = Vector2.left;
+            direction = Vector2.left;
         }
-        else if (verticalInput > 0)
+        else if (verticalInput > 0&&horizontalInput ==0)
         {
-            lastInputDirection = Vector2.up;
+            direction = Vector2.up;
         }
-        else if (verticalInput < 0)
+        else if (verticalInput > 0&&horizontalInput == 0)
         {
-            lastInputDirection = Vector2.down;
+            direction = Vector2.up;
+        }
+        else
+        {
+            direction = Vector2.right;
         }
         rb.velocity = new Vector2(horizontalInput, verticalInput).normalized * MoveSpeed;
     }
@@ -107,32 +116,38 @@ public class Light : MonoBehaviour, IRay
     {
         List<Vector2> rayPoints = new List<Vector2> { rb.position };
         List<Vector2> rayPoints2 = new List<Vector2> { rb.position };
-        Vector2 currentDirection = lastInputDirection;
+        
+        Vector2 currentDirection = direction;
         Vector2 currentDirection2;
         float remainingLength = rayLength;
         int reflections = 0;
+        
         #region 射线具体判断逻辑
         while (remainingLength > 0 && reflections < maxReflections)
         {
-            RaycastHit2D hit = Physics2D.Raycast(rayPoints[rayPoints.Count - 1], currentDirection, remainingLength, collisionLayer);
+            RaycastHit2D hit = Physics2D.Raycast(rayPoints[rayPoints.Count-1],currentDirection, remainingLength, collisionLayer);
             if (hit.collider == null)
             {
                 rayPoints.Add(rayPoints[rayPoints.Count - 1] + currentDirection * remainingLength);
                 remainingLength = 0;
             }
-            else if (hit.collider != null && hit.collider.tag != "Division")
+            else if (hit.collider != null )
             {
-
                 Vector2 hitPoint = hit.point;
                 Vector2 normal = hit.normal;
-
+                Debug.Log($"碰撞点{hit.point}");
+                Debug.Log($"碰撞点法向{hit.normal}");
+                Debug.Log($"当前射出方向{currentDirection}");
                 switch (hit.collider.tag)
                 {
                     case "Reflection":
+                        hit.point=DecideOffset(offset, currentDirection,ref hitPoint);
                         currentDirection = Vector2.Reflect(currentDirection, normal);
+                        Debug.Log($"反射后射出方向{currentDirection}");
                         break;
                     #region 折射相关
                     case "Refraction1"://60度
+                        
                         if (lastInputDirection == Vector2.right)
                         {
                             currentDirection = new Vector2(1, -1.7f).normalized;
@@ -149,6 +164,7 @@ public class Light : MonoBehaviour, IRay
                         {
                             currentDirection = new Vector2(1.7f, -1f).normalized;
                         }
+                        Debug.Log($"折射目前角度{currentDirection}");
                         break;
                     //case "Refraction2"://120度
                     //    if (lastInputDirection == Vector2.right)
@@ -170,6 +186,7 @@ public class Light : MonoBehaviour, IRay
                     //    break;
                     #endregion
                     case "ChangeColor":
+                        int change = rayPoints.Count - 1;
                         color = color + 1;
                         break;
                     #region 障碍相关
@@ -215,6 +232,7 @@ public class Light : MonoBehaviour, IRay
                     case "Filter":
                         if (hit.collider.GetComponent<Filter>())
                         {
+                            ChangeColor = rayPoints.Count - 1;
                             Filter filter = hit.collider.GetComponent<Filter>();
                             color = filter.color;
                         }                                                
@@ -223,25 +241,44 @@ public class Light : MonoBehaviour, IRay
                     default:
                         break; //结束射线
                 }
-                Debug.Log(currentDirection);
-                rayPoints.Add(hitPoint);
+                rayPoints.Add(hit.point);
                 remainingLength -= hit.distance;
                 reflections++;
             }
-            #endregion
-            UpdateLineRenderer(rayPoints);
-            StartCoroutine(ClearLineAfterDelay(lineDuration));
+            #endregion           
         }
+        UpdateLineRenderer(rayPoints);
+        StartCoroutine(ClearLineAfterDelay(lineDuration));
     }
     //更新线条位置
     private void UpdateLineRenderer(List<Vector2> rayPoints)
     {
-        lineRenderer.material.color = ConvertColor(color);
-        lineRenderer.positionCount = rayPoints.Count;
-        for(int i=0;i< lineRenderer.positionCount; i++)
+        if(ChangeColor == 0)
         {
-            lineRenderer.SetPosition(i, rayPoints[i]);
+            
+            lineRenderer.positionCount = rayPoints.Count;
+            for (int i = 0; i < lineRenderer.positionCount; i++)
+            {
+                lineRenderer.SetPosition(i, rayPoints[i]);
+                Debug.Log($"碰撞点和结束点{rayPoints[i]}");
+            }
         }
+        if (ChangeColor != 0)
+        {
+            for (int i = 0; i < ChangeColor; i++)
+            {
+                lineRenderer.SetPosition(i, rayPoints[i]);
+            }
+            lineRenderer.material.color = ConvertColor(color);
+            for (int j = ChangeColor; j < rayPoints.Count; j++)
+            {
+                lineRenderer.SetPosition(j, rayPoints[j]);
+                
+            }
+            lineRenderer.material.color = Color.white;
+            ChangeColor = 0;
+        }
+        
         
     }
     //清除线条
@@ -290,6 +327,47 @@ public class Light : MonoBehaviour, IRay
         {
             decay = 4;
         }
+    }
+    //检测碰撞点应该往哪偏移
+    Vector2 DecideOffset(float offset, Vector2 currentdirection,ref Vector2 hitpoint)
+    {
+        if (currentdirection.x > 0 && currentdirection.y>0)
+        {
+            hitpoint.x -= offset;
+            hitpoint.y -= offset;
+        }
+        else if (currentdirection.x>0 && currentdirection.y<0)
+        {
+            hitpoint.x -= offset;
+            hitpoint.y += offset;
+        }
+        else if (currentdirection.x < 0 && currentdirection.y > 0)
+        {
+            hitpoint.x += offset;
+            hitpoint.y -= offset;
+        }
+        else if (currentdirection.x < 0 && currentdirection.y < 0)
+        {
+            hitpoint.x += offset;
+            hitpoint.y += offset;
+        }
+        else if (currentdirection.x == 0 && currentdirection.y < 0)
+        {
+            hitpoint.y += offset;           
+        }
+        else if (currentdirection.x == 0 && currentdirection.y > 0)
+        {
+            hitpoint.y -= offset;
+        }
+        else if (currentdirection.x < 0 && currentdirection.y == 0)
+        {
+            hitpoint.x += offset;
+        }
+        else if (currentdirection.x > 0 && currentdirection.y == 0)
+        {
+            hitpoint.x -= offset;
+        }
+        return hitpoint;
     }
 }
 
